@@ -1,0 +1,43 @@
+# Build output
+build/
+out/
+
+# vcpkg installed packages (restored by vcpkg install)
+vcpkg_installed/
+
+# Compiled shaders (rebuilt from src/ with glslc)
+assets/shaders/compiled/*.spv
+
+# CMake generated files
+CMakeCache.txt
+CMakeFiles/
+cmake_install.cmake
+compile_commands.json
+*.cmake
+!cmake/HiromiEngineConfig.cmake.in
+
+# IDE / editor
+.vscode/
+.idea/
+*.user
+*.suo
+*.sdf
+*.opensdf
+*.VC.db
+*.VC.opendb
+.vs/
+
+# macOS
+.DS_Store
+**/.DS_Store
+
+# clangd
+.cache/
+
+# Binaries
+*.o
+*.a
+*.so
+*.dylib
+*.dll
+*.exe

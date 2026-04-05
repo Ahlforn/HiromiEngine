@@ -1,0 +1,16 @@
+{
+  "$schema": "https://raw.githubusercontent.com/microsoft/vcpkg-tool/main/docs/vcpkg.schema.json",
+  "name": "hiromi-engine",
+  "version": "0.1.0",
+  "description": "Archetype ECS game engine with SDL3 2D/3D rendering",
+  "dependencies": [
+    { "name": "sdl3" },
+    {
+      "name": "sdl3-image",
+      "features": ["png", "jpeg"]
+    },
+    { "name": "sdl3-ttf" },
+    { "name": "glm" },
+    { "name": "fmt" }
+  ]
+}
