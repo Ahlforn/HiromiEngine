@@ -29,7 +29,7 @@ target_include_directories(HiromiEngine
 target_link_libraries(HiromiEngine
     PUBLIC
         SDL3::SDL3
-        SDL3_image::SDL3_image
+        $<IF:$<TARGET_EXISTS:SDL3_image::SDL3_image-shared>,SDL3_image::SDL3_image-shared,SDL3_image::SDL3_image-static>
         SDL3_ttf::SDL3_ttf
         glm::glm
         fmt::fmt
