@@ -15,7 +15,7 @@ Renderer2D::~Renderer2D() {
 
 bool Renderer2D::initialize(SDL_Window* window) {
     // Create our own device when called standalone (not sharing with Renderer3D).
-    SDL_GPUDevice* dev = SDL_CreateGPUDevice(SDL_GPU_SHADERFORMAT_SPIRV, false, nullptr);
+    SDL_GPUDevice* dev = SDL_CreateGPUDevice(preferred_shader_format(), false, nullptr);
     if (!dev) {
         log::error("Renderer2D: SDL_CreateGPUDevice failed: {}", SDL_GetError());
         return false;
@@ -42,6 +42,53 @@ bool Renderer2D::initialize_with_device(SDL_Window* window, SDL_GPUDevice* devic
     recreate_depth_texture(fb_w_, fb_h_);
     build_pipeline();
 
+    // Create a 1x1 white texture for untextured sprites.
+    {
+        SDL_GPUTextureCreateInfo tci{};
+        tci.type   = SDL_GPU_TEXTURETYPE_2D;
+        tci.format = SDL_GPU_TEXTUREFORMAT_R8G8B8A8_UNORM;
+        tci.usage  = SDL_GPU_TEXTUREUSAGE_SAMPLER;
+        tci.width  = 1;
+        tci.height = 1;
+        tci.layer_count_or_depth = 1;
+        tci.num_levels = 1;
+        white_tex_ = SDL_CreateGPUTexture(device_, &tci);
+        HIROMI_ASSERT(white_tex_ != nullptr, "Renderer2D: failed to create white texture");
+
+        // Upload a single white pixel.
+        SDL_GPUTransferBufferCreateInfo tbci{};
+        tbci.usage = SDL_GPU_TRANSFERBUFFERUSAGE_UPLOAD;
+        tbci.size  = 4;
+        SDL_GPUTransferBuffer* tb = SDL_CreateGPUTransferBuffer(device_, &tbci);
+        auto* px = static_cast<uint8_t*>(SDL_MapGPUTransferBuffer(device_, tb, false));
+        px[0] = 255; px[1] = 255; px[2] = 255; px[3] = 255;
+        SDL_UnmapGPUTransferBuffer(device_, tb);
+
+        SDL_GPUCommandBuffer* upload_cmd = SDL_AcquireGPUCommandBuffer(device_);
+        SDL_GPUCopyPass* copy = SDL_BeginGPUCopyPass(upload_cmd);
+        SDL_GPUTextureTransferInfo src{};
+        src.transfer_buffer = tb;
+        SDL_GPUTextureRegion dst{};
+        dst.texture = white_tex_;
+        dst.w = 1; dst.h = 1; dst.d = 1;
+        SDL_UploadToGPUTexture(copy, &src, &dst, false);
+        SDL_EndGPUCopyPass(copy);
+        SDL_SubmitGPUCommandBuffer(upload_cmd);
+        SDL_ReleaseGPUTransferBuffer(device_, tb);
+    }
+
+    // Create a default nearest-neighbor sampler.
+    {
+        SDL_GPUSamplerCreateInfo sci{};
+        sci.min_filter   = SDL_GPU_FILTER_NEAREST;
+        sci.mag_filter   = SDL_GPU_FILTER_NEAREST;
+        sci.address_mode_u = SDL_GPU_SAMPLERADDRESSMODE_CLAMP_TO_EDGE;
+        sci.address_mode_v = SDL_GPU_SAMPLERADDRESSMODE_CLAMP_TO_EDGE;
+        sci.address_mode_w = SDL_GPU_SAMPLERADDRESSMODE_CLAMP_TO_EDGE;
+        default_sampler_ = SDL_CreateGPUSampler(device_, &sci);
+        HIROMI_ASSERT(default_sampler_ != nullptr, "Renderer2D: failed to create default sampler");
+    }
+
     proj_ = glm::orthoRH_ZO(0.0f, static_cast<float>(fb_w_),
                              static_cast<float>(fb_h_), 0.0f,
                              -1.0f, 1.0f);
@@ -59,8 +106,10 @@ void Renderer2D::shutdown() {
     if (vert_shader_) { SDL_ReleaseGPUShader(device_, vert_shader_); vert_shader_ = nullptr; }
     if (frag_shader_) { SDL_ReleaseGPUShader(device_, frag_shader_); frag_shader_ = nullptr; }
     if (depth_tex_)   { SDL_ReleaseGPUTexture(device_, depth_tex_);  depth_tex_   = nullptr; }
-    if (vertex_buf_)  { SDL_ReleaseGPUBuffer(device_, vertex_buf_);  vertex_buf_  = nullptr; }
-    if (index_buf_)   { SDL_ReleaseGPUBuffer(device_, index_buf_);   index_buf_   = nullptr; }
+    if (vertex_buf_)  { SDL_ReleaseGPUBuffer(device_, vertex_buf_);   vertex_buf_  = nullptr; }
+    if (index_buf_)   { SDL_ReleaseGPUBuffer(device_, index_buf_);    index_buf_   = nullptr; }
+    if (white_tex_)   { SDL_ReleaseGPUTexture(device_, white_tex_);   white_tex_   = nullptr; }
+    if (default_sampler_) { SDL_ReleaseGPUSampler(device_, default_sampler_); default_sampler_ = nullptr; }
 
     if (owns_device_) {
         SDL_DestroyGPUDevice(device_);
@@ -141,15 +190,17 @@ void Renderer2D::build_pipeline() {
     ShaderLoader loader(device_);
 
     vert_shader_ = loader.load(
-        "assets/shaders/compiled/sprite.vert.spv",
+        shader_path("sprite.vert"),
         SDL_GPU_SHADERSTAGE_VERTEX,
+        preferred_shader_format(),
         "main",
         /*samplers=*/0,
         /*uniform_buffers=*/1);  // binding 0: projection matrix
 
     frag_shader_ = loader.load(
-        "assets/shaders/compiled/sprite.frag.spv",
+        shader_path("sprite.frag"),
         SDL_GPU_SHADERSTAGE_FRAGMENT,
+        preferred_shader_format(),
         "main",
         /*samplers=*/1);  // binding 0: texture sampler
 
@@ -329,16 +380,21 @@ void Renderer2D::flush_sprites(SDL_GPUCommandBuffer* cmd_buf) {
             0);
     };
 
+    // Bind fallback white texture before the loop so untextured sprites
+    // at the start of the queue still have a valid sampler binding.
+    {
+        SDL_GPUTextureSamplerBinding tsb{white_tex_, default_sampler_};
+        SDL_BindGPUFragmentSamplers(pass, 0, &tsb, 1);
+    }
+
     for (uint32_t i = 0; i < sprite_count; ++i) {
         SDL_GPUTexture* tex = draw_queue_[i].texture;
         if (tex != last_tex) {
             flush_batch(i);
             batch_start = i;
             last_tex = tex;
-            if (tex) {
-                SDL_GPUTextureSamplerBinding tsb{tex, nullptr};
-                SDL_BindGPUFragmentSamplers(pass, 0, &tsb, 1);
-            }
+            SDL_GPUTextureSamplerBinding tsb{tex ? tex : white_tex_, default_sampler_};
+            SDL_BindGPUFragmentSamplers(pass, 0, &tsb, 1);
         }
     }
     flush_batch(sprite_count);

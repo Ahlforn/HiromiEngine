@@ -1,6 +1,7 @@
 #include "Engine.hpp"
 #include "../core/Assert.hpp"
 #include "../core/Logger.hpp"
+#include "../renderer/ShaderLoader.hpp"
 
 #include <SDL3/SDL.h>
 #include <algorithm>
@@ -35,7 +36,7 @@ bool Engine::initialize() {
     }
 
     // Create a single shared SDL_GPU device for both renderers.
-    device_ = SDL_CreateGPUDevice(SDL_GPU_SHADERFORMAT_SPIRV, false, nullptr);
+    device_ = SDL_CreateGPUDevice(preferred_shader_format(), false, nullptr);
     if (!device_) {
         log::error("Engine: SDL_CreateGPUDevice failed: {}", SDL_GetError());
         return false;

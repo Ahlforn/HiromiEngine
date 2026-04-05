@@ -13,16 +13,10 @@ Full architecture reference: `docs/architecture.md`
 ## Build
 
 ```bash
-# Prerequisites: VCPKG_ROOT set, Ninja installed, Vulkan SDK for glslc
+# Prerequisites: VCPKG_ROOT set, Ninja installed, glslc (Vulkan SDK), spirv-cross
 cmake --preset default        # Debug build
 cmake --preset release        # Release build
-cmake --build build
-
-# Compile shaders (must be done before running; .spv files go in assets/shaders/compiled/)
-glslc assets/shaders/src/sprite.vert.glsl -o assets/shaders/compiled/sprite.vert.spv
-glslc assets/shaders/src/sprite.frag.glsl -o assets/shaders/compiled/sprite.frag.spv
-glslc assets/shaders/src/mesh.vert.glsl   -o assets/shaders/compiled/mesh.vert.spv
-glslc assets/shaders/src/mesh.frag.glsl   -o assets/shaders/compiled/mesh.frag.spv
+cmake --build build           # Also compiles shaders (GLSL → SPIR-V → MSL)
 
 ./build/example/hiromi_example
 
@@ -93,6 +87,8 @@ Global, non-entity data stored via `world.add_resource<T>()` /
 Both `Renderer2D` and `Renderer3D` use **SDL_GPU only**. `SDL_Renderer` is never
 used — it cannot coexist with `SDL_GPU` on the same window.
 
+- **Backend**: Metal on macOS, Vulkan elsewhere. `preferred_shader_format()`
+  (in `ShaderLoader.hpp`) selects the right format at compile time via `__APPLE__`.
 - **Renderer2D**: orthographic projection, sprite quad batching, blended draw calls
   sorted by `Sprite::z_order`.
 - **Renderer3D**: perspective pipeline, per-frame draw queue, depth buffer,
@@ -116,9 +112,18 @@ Use `glm::perspectiveRH_ZO` and `glm::orthoRH_ZO` everywhere. Never use the plai
 SDL_GPU.
 
 ### Shaders
-GLSL sources in `assets/shaders/src/`. Compiled offline to SPIR-V with `glslc`.
-The `#pragma shader_stage(vertex/fragment)` directive is used in some shaders
-for SDL_shadercross compatibility.
+GLSL sources in `assets/shaders/src/`. The CMake `compile_shaders` target
+(built automatically) produces both formats:
+1. GLSL → SPIR-V via `glslc -fshader-stage=<stage>`
+2. SPIR-V → MSL via `spirv-cross --msl`
+
+Output goes to `assets/shaders/compiled/` (`.spv` and `.msl` files).
+At runtime, `preferred_shader_format()` selects MSL on macOS (Metal) and
+SPIR-V elsewhere (Vulkan). `shader_path("sprite.vert")` returns the
+correct compiled path for the current platform.
+
+**spirv-cross renames `main` → `main0`** in MSL output. `ShaderLoader::load()`
+handles this automatically — callers still pass `"main"` as the entry point.
 
 Shader uniform binding conventions:
 - Vertex uniform buffer set 1, binding 0 — projection / MVP matrix
@@ -171,6 +176,8 @@ engine.add_system<RenderSystem2D>(SystemSchedule::VARIABLE, *engine.renderer_2d(
 | 2 | SDL_GPU + SDL_Renderer window conflict | SDL_GPU only — no SDL_Renderer |
 | 3 | Depth texture resize | Destroyed and recreated in `on_resize` |
 | 4 | GLM NDC mismatch | `GLM_FORCE_DEPTH_ZERO_TO_ONE` set in CMake; use `*RH_ZO` variants |
+| 9 | System headers shadow vcpkg | `CMAKE_NO_SYSTEM_FROM_IMPORTED ON` in CMake ensures vcpkg headers win |
+| 10 | spirv-cross renames `main` | `ShaderLoader::load()` auto-remaps to `main0` for MSL format |
 | 5 | Mutation inside `each` | UB; `iterating_` assert in debug |
 | 6 | Transform hierarchy cycles | Multi-pass loop capped at 64 iterations; assert fires on overflow |
 | 7 | Resource vs component ID collision | `ResourceRegistry` uses a separate counter |
@@ -187,3 +194,10 @@ engine.add_system<RenderSystem2D>(SystemSchedule::VARIABLE, *engine.renderer_2d(
 | `sdl3-ttf` | Font rendering |
 | `glm` | Math (vectors, matrices, quaternions) |
 | `fmt` | Logging and string formatting |
+
+### External Tools (not vcpkg — must be installed on host)
+
+| Tool | Use |
+|---|---|
+| `glslc` | GLSL → SPIR-V compilation (from Vulkan SDK) |
+| `spirv-cross` | SPIR-V → MSL cross-compilation for Metal |

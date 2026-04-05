@@ -12,7 +12,7 @@ Renderer3D::~Renderer3D() {
 }
 
 bool Renderer3D::initialize(SDL_Window* window) {
-    SDL_GPUDevice* dev = SDL_CreateGPUDevice(SDL_GPU_SHADERFORMAT_SPIRV, false, nullptr);
+    SDL_GPUDevice* dev = SDL_CreateGPUDevice(preferred_shader_format(), false, nullptr);
     if (!dev) {
         log::error("Renderer3D: SDL_CreateGPUDevice failed: {}", SDL_GetError());
         return false;

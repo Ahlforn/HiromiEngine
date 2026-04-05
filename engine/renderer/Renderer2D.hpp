@@ -78,6 +78,9 @@ private:
 
     std::vector<SpriteDraw> draw_queue_;
 
+    SDL_GPUTexture* white_tex_    = nullptr;  // 1x1 white fallback for untextured sprites
+    SDL_GPUSampler* default_sampler_ = nullptr;
+
     glm::mat4 proj_  = glm::mat4(1.0f);
     int fb_w_ = 0, fb_h_ = 0;
 

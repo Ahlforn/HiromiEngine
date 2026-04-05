@@ -8,6 +8,22 @@
 
 namespace hiromi {
 
+SDL_GPUShaderFormat preferred_shader_format() {
+#ifdef __APPLE__
+    return SDL_GPU_SHADERFORMAT_MSL;
+#else
+    return SDL_GPU_SHADERFORMAT_SPIRV;
+#endif
+}
+
+const char* shader_extension(SDL_GPUShaderFormat format) {
+    return (format == SDL_GPU_SHADERFORMAT_MSL) ? ".msl" : ".spv";
+}
+
+std::string shader_path(const std::string& name, SDL_GPUShaderFormat format) {
+    return "assets/shaders/compiled/" + name + shader_extension(format);
+}
+
 ShaderLoader::ShaderLoader(SDL_GPUDevice* device) : device_(device) {
     HIROMI_ASSERT(device_ != nullptr, "ShaderLoader: null device");
 }
@@ -15,6 +31,7 @@ ShaderLoader::ShaderLoader(SDL_GPUDevice* device) : device_(device) {
 SDL_GPUShader* ShaderLoader::load(
     const std::string& path,
     SDL_GPUShaderStage stage,
+    SDL_GPUShaderFormat format,
     const char*        entry_point,
     uint32_t           num_samplers,
     uint32_t           num_uniform_buffers,
@@ -38,11 +55,18 @@ SDL_GPUShader* ShaderLoader::load(
         return nullptr;
     }
 
+    // spirv-cross renames "main" → "main0" in MSL output.
+    const char* effective_entry = entry_point;
+    if (format == SDL_GPU_SHADERFORMAT_MSL &&
+        std::string_view(entry_point) == "main") {
+        effective_entry = "main0";
+    }
+
     SDL_GPUShaderCreateInfo info{};
     info.code             = code.data();
     info.code_size        = code.size();
-    info.entrypoint       = entry_point;
-    info.format           = SDL_GPU_SHADERFORMAT_SPIRV;
+    info.entrypoint       = effective_entry;
+    info.format           = format;
     info.stage            = stage;
     info.num_samplers     = num_samplers;
     info.num_uniform_buffers  = num_uniform_buffers;

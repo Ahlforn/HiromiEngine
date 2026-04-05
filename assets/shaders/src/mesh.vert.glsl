@@ -1,5 +1,5 @@
-#pragma shader_stage(vertex)
 #version 450
+#pragma shader_stage(vertex)
 
 // Basic 3D mesh vertex shader.
 // Vertex layout: position (xyz), normal (xyz), uv (xy) — 32 bytes total.
