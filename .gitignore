@@ -16,16 +16,55 @@ compile_commands.json
 *.cmake
 !cmake/HiromiEngineConfig.cmake.in
 
-# IDE / editor
+# Visual Studio Code
 .vscode/
-.idea/
+
+# Visual Studio
+.vs/
 *.user
 *.suo
 *.sdf
 *.opensdf
 *.VC.db
 *.VC.opendb
-.vs/
+*.vcxproj.user
+
+# JetBrains (CLion, etc.)
+.idea/
+cmake-build-*/
+*.iml
+
+# Xcode
+*.xcodeproj/
+*.xcworkspace/
+xcuserdata/
+DerivedData/
+*.pbxuser
+*.mode1v3
+*.mode2v3
+*.perspectivev3
+
+# Qt Creator
+*.pro.user
+*.qbs.user
+*.creator
+*.creator.user
+
+# Eclipse CDT
+.project
+.cproject
+.settings/
+
+# Emacs
+*~
+\#*\#
+.\#*
+
+# Vim / Neovim
+*.swp
+*.swo
+Session.vim
+.nvimrc.local
 
 # macOS
 .DS_Store
