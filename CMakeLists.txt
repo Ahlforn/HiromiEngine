@@ -5,6 +5,10 @@ set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_CXX_EXTENSIONS OFF)
 
+# Ensure vcpkg (imported) include paths use -I instead of -isystem,
+# so they take priority over system-installed headers (e.g. /usr/local/include).
+set(CMAKE_NO_SYSTEM_FROM_IMPORTED ON)
+
 # ---- Dependencies (provided by vcpkg) ----------------------------------------
 find_package(SDL3        CONFIG REQUIRED)
 find_package(SDL3_image CONFIG REQUIRED)

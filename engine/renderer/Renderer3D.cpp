@@ -210,7 +210,7 @@ void Renderer3D::flush_draw_commands(SDL_GPUCommandBuffer* cmd_buf, SDL_GPUTextu
         pc.mvp = proj_ * view_ * draw.model_matrix;
         SDL_PushGPUVertexUniformData(cmd_buf, 0, &pc, sizeof(pc));
 
-        SDL_GPUBufferBinding vb{draw.vertex_buffer, draw.vertex_offset};
+        SDL_GPUBufferBinding vb{draw.vertex_buffer, static_cast<Uint32>(draw.vertex_offset)};
         SDL_BindGPUVertexBuffers(pass, 0, &vb, 1);
 
         SDL_GPUBufferBinding ib{draw.index_buffer, 0};

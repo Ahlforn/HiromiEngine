@@ -7,6 +7,10 @@
 
 namespace hiromi {
 
+// Helper: maps any type to ComponentPool*, making the pointer type dependent
+// on a parameter pack so that pack expansion works correctly.
+template<typename> using PoolPtr = ComponentPool*;
+
 template<typename... C>
     requires (Component<C> && ...)
 template<typename Fn>
@@ -16,12 +20,12 @@ void Query<C...>::each(Fn&& fn) {
         if (storage->entity_count() == 0) continue;
 
         // Grab typed pool pointers once per archetype.
-        std::tuple<ComponentPool*...> pools{
+        std::tuple<PoolPtr<C>...> pools{
             storage->pool_for(ComponentRegistry::get<C>())...
         };
 
         // Debug: assert every requested pool exists in this archetype.
-        std::apply([](auto*... p) {
+        std::apply([](PoolPtr<C>... p) {
             ((void)(assert(p != nullptr)), ...);
         }, pools);
 
@@ -30,7 +34,7 @@ void Query<C...>::each(Fn&& fn) {
 
         for (std::size_t row = 0; row < count; ++row) {
             // Unpack pool pointers and call fn with typed references.
-            std::apply([&](ComponentPool*... p) {
+            std::apply([&](PoolPtr<C>... p) {
                 fn(entities[row], *static_cast<C*>(p->at(row))...);
             }, pools);
         }
